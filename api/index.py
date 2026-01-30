@@ -836,9 +836,9 @@ class MyHandler(BaseHTTPRequestHandler):
             cache_manager.set(cache_key, fallback_result)  # Cache fallback too
             
             return fallback_result
-    
     def _execute_vestiaire_scrape(self, search_text, page_number, items_per_page, min_price=None, max_price, country):
         """Execute actual Vestiaire scrape using official Product Search API"""
+
         
         import requests
         import time
