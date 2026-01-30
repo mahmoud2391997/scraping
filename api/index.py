@@ -218,6 +218,14 @@ circuit_breaker = CircuitBreaker(failure_threshold=3, recovery_timeout=120)
 request_queue = RequestQueue(max_concurrent=2)  # Limit concurrent requests
 
 class MyHandler(BaseHTTPRequestHandler):
+    def do_OPTIONS(self):
+        """Handle OPTIONS preflight requests for CORS"""
+        self.send_response(200)
+        self.send_header('Access-Control-Allow-Origin', '*')
+        self.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+        self.send_header('Access-Control-Allow-Headers', 'Content-Type, Authorization')
+        self.end_headers()
+        
     def do_GET(self):
         # Parse URL
         parsed_path = urlparse(self.path)
@@ -371,6 +379,9 @@ class MyHandler(BaseHTTPRequestHandler):
         """Send HTTP response"""
         self.send_response(status_code)
         self.send_header('Content-type', content_type)
+        self.send_header('Access-Control-Allow-Origin', '*')
+        self.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+        self.send_header('Access-Control-Allow-Headers', 'Content-Type, Authorization')
         self.send_header('Content-length', str(len(content.encode('utf-8'))))
         self.end_headers()
         self.wfile.write(content.encode('utf-8'))
