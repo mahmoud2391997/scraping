@@ -1,16 +1,19 @@
-from flask import Flask, render_template
+from flask import Flask, jsonify
 import pandas as pd
 
 app = Flask(__name__)
 
 @app.route('/')
 def index():
-    # Assuming the scraped data is in a CSV file named 'scraped_data.csv'
     try:
         data = pd.read_csv('scraped_data.csv')
-        return render_template('index.html', tables=[data.to_html(classes='data')], titles=data.columns.values)
+        return data.to_html()
     except FileNotFoundError:
-        return "Scraped data not found. Please run the scraper first."
+        return "Scraping API is running! No data file found. Use the API endpoints to scrape data."
+
+@app.route('/api/health')
+def health():
+    return jsonify({"status": "healthy", "service": "scraping-api"})
 
 if __name__ == '__main__':
     app.run(debug=True, port=5001)
