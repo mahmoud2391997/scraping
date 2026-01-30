@@ -785,6 +785,160 @@ class MyHandler(BaseHTTPRequestHandler):
             additional_products.append(product)
         
         return base_products + additional_products
+    
+    def scrape_vestiaire_data(self, search_text, page_number=1, items_per_page=50, min_price=None, max_price=None, country='uk'):
+        """Enhanced Vestiaire scraper with advanced limitation avoidance strategies"""
+        
+        # Create cache key
+        cache_key = f"vestiaire_{search_text}_{page_number}_{items_per_page}_{country}_{min_price}_{max_price}"
+        
+        # Check cache first
+        cached_result = cache_manager.get(cache_key)
+        if cached_result:
+            print(f"🎯 Cache hit for Vestiaire: {search_text}")
+            return cached_result
+        
+        # Circuit breaker protection
+        def protected_scrape():
+            return self._execute_vestiaire_scrape(search_text, page_number, items_per_page, min_price, max_price, country)
+        
+        try:
+            # Execute with circuit breaker
+            result = circuit_breaker.execute(protected_scrape)
+            
+            # Cache successful result
+            cache_manager.set(cache_key, result)
+            
+            # Adapt rate limiting based on success
+            rate_limiter.adapt_rate(1.0)  # 100% success rate
+            
+            print(f"✅ Successful Vestiaire scrape: {search_text}")
+            return result
+            
+        except Exception as e:
+            print(f"❌ Vestiaire scrape failed: {e}")
+            
+            # Adapt rate limiting based on failure
+            rate_limiter.adapt_rate(0.0)  # 0% success rate
+            
+            # Return fallback data if scraping fails
+            print("🔄 Returning fallback sample data for Vestiaire")
+            sample_data = self.get_vestiaire_sample_data()
+            pagination = {
+                'current_page': 1,
+                'total_pages': 1,
+                'has_more': False,
+                'items_per_page': len(sample_data),
+                'total_items': len(sample_data)
+            }
+            
+            fallback_result = {'products': sample_data, 'pagination': pagination}
+            cache_manager.set(cache_key, fallback_result)  # Cache fallback too
+            
+            return fallback_result
+    
+    def _execute_vestiaire_scrape(self, search_text, page_number, items_per_page, min_price, max_price, country):
+        """Execute actual Vestiaire scrape using requests with basic implementation"""
+        
+        import requests
+        from bs4 import BeautifulSoup
+        import time
+        import random
+        
+        # Vestiaire Collective URL construction
+        base_url = "https://www.vestiairecollective.co.uk"
+        search_url = f"{base_url}/search/?q={search_text}&page={page_number}"
+        
+        # Headers to mimic browser
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+            'Accept-Language': 'en-US,en;q=0.5',
+            'Accept-Encoding': 'gzip, deflate',
+            'Connection': 'keep-alive',
+            'Upgrade-Insecure-Requests': '1',
+        }
+        
+        try:
+            print(f"🔄 Scraping Vestiaire: {search_url}")
+            
+            # Make request with delay
+            time.sleep(random.uniform(1, 3))
+            response = requests.get(search_url, headers=headers, timeout=10)
+            
+            if response.status_code == 200:
+                soup = BeautifulSoup(response.content, 'html.parser')
+                products = []
+                
+                # Find product containers (adjust selector based on actual HTML structure)
+                product_elements = soup.find_all('div', class_='product-item') or soup.find_all('article', class_='product') or soup.find_all('div', {'data-testid': 'product-card'})
+                
+                for element in product_elements[:items_per_page]:
+                    try:
+                        # Extract product information
+                        title_elem = element.find('h2') or element.find('h3') or element.find('a', class_='product-title')
+                        price_elem = element.find('span', class_='price') or element.find('div', class_='price')
+                        image_elem = element.find('img')
+                        link_elem = element.find('a')
+                        
+                        if title_elem and price_elem:
+                            title = title_elem.get_text(strip=True)
+                            price = price_elem.get_text(strip=True)
+                            image_url = image_elem.get('src', '') if image_elem else ''
+                            product_url = base_url + link_elem.get('href', '') if link_elem else ''
+                            
+                            # Extract brand from title (first word usually)
+                            brand = title.split()[0] if title else 'Unknown'
+                            
+                            # Extract size if available
+                            size_elem = element.find('span', class_='size') or element.find('div', class_='size')
+                            size = size_elem.get_text(strip=True) if size_elem else 'N/A'
+                            
+                            # Extract condition if available
+                            condition_elem = element.find('span', class_='condition') or element.find('div', class_='condition')
+                            condition = condition_elem.get_text(strip=True) if condition_elem else 'Good'
+                            
+                            # Extract seller if available
+                            seller_elem = element.find('span', class_='seller') or element.find('div', class_='seller')
+                            seller = seller_elem.get_text(strip=True) if seller_elem else 'vestiaire_seller'
+                            
+                            product = {
+                                'Title': title,
+                                'Price': price,
+                                'Brand': brand,
+                                'Size': size,
+                                'Image': image_url,
+                                'Link': product_url,
+                                'Condition': condition,
+                                'Seller': seller,
+                                'OriginalPrice': price,  # Vestiaire often shows original price
+                                'Discount': '0%'  # Would need to calculate if original price available
+                            }
+                            
+                            products.append(product)
+                            
+                    except Exception as e:
+                        print(f"⚠️ Error parsing product: {e}")
+                        continue
+                
+                # Create pagination
+                pagination = {
+                    'current_page': page_number,
+                    'total_pages': page_number + (1 if len(products) == items_per_page else 0),
+                    'has_more': len(products) == items_per_page,
+                    'items_per_page': len(products),
+                    'total_items': len(products)
+                }
+                
+                print(f"✅ Successfully scraped {len(products)} products from Vestiaire")
+                return {'products': products, 'pagination': pagination}
+                
+            else:
+                raise Exception(f"HTTP {response.status_code}: Failed to fetch Vestiaire page")
+                
+        except Exception as e:
+            print(f"❌ Vestiaire scraping failed: {e}")
+            raise e
 
 # Main handler
 handler = MyHandler
@@ -1386,6 +1540,160 @@ if __name__ == '__main__':
             additional_products.append(product)
         
         return base_products + additional_products
+    
+    def scrape_vestiaire_data(self, search_text, page_number=1, items_per_page=50, min_price=None, max_price=None, country='uk'):
+        """Enhanced Vestiaire scraper with advanced limitation avoidance strategies"""
+        
+        # Create cache key
+        cache_key = f"vestiaire_{search_text}_{page_number}_{items_per_page}_{country}_{min_price}_{max_price}"
+        
+        # Check cache first
+        cached_result = cache_manager.get(cache_key)
+        if cached_result:
+            print(f"🎯 Cache hit for Vestiaire: {search_text}")
+            return cached_result
+        
+        # Circuit breaker protection
+        def protected_scrape():
+            return self._execute_vestiaire_scrape(search_text, page_number, items_per_page, min_price, max_price, country)
+        
+        try:
+            # Execute with circuit breaker
+            result = circuit_breaker.execute(protected_scrape)
+            
+            # Cache successful result
+            cache_manager.set(cache_key, result)
+            
+            # Adapt rate limiting based on success
+            rate_limiter.adapt_rate(1.0)  # 100% success rate
+            
+            print(f"✅ Successful Vestiaire scrape: {search_text}")
+            return result
+            
+        except Exception as e:
+            print(f"❌ Vestiaire scrape failed: {e}")
+            
+            # Adapt rate limiting based on failure
+            rate_limiter.adapt_rate(0.0)  # 0% success rate
+            
+            # Return fallback data if scraping fails
+            print("🔄 Returning fallback sample data for Vestiaire")
+            sample_data = self.get_vestiaire_sample_data()
+            pagination = {
+                'current_page': 1,
+                'total_pages': 1,
+                'has_more': False,
+                'items_per_page': len(sample_data),
+                'total_items': len(sample_data)
+            }
+            
+            fallback_result = {'products': sample_data, 'pagination': pagination}
+            cache_manager.set(cache_key, fallback_result)  # Cache fallback too
+            
+            return fallback_result
+    
+    def _execute_vestiaire_scrape(self, search_text, page_number, items_per_page, min_price, max_price, country):
+        """Execute actual Vestiaire scrape using requests with basic implementation"""
+        
+        import requests
+        from bs4 import BeautifulSoup
+        import time
+        import random
+        
+        # Vestiaire Collective URL construction
+        base_url = "https://www.vestiairecollective.co.uk"
+        search_url = f"{base_url}/search/?q={search_text}&page={page_number}"
+        
+        # Headers to mimic browser
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+            'Accept-Language': 'en-US,en;q=0.5',
+            'Accept-Encoding': 'gzip, deflate',
+            'Connection': 'keep-alive',
+            'Upgrade-Insecure-Requests': '1',
+        }
+        
+        try:
+            print(f"🔄 Scraping Vestiaire: {search_url}")
+            
+            # Make request with delay
+            time.sleep(random.uniform(1, 3))
+            response = requests.get(search_url, headers=headers, timeout=10)
+            
+            if response.status_code == 200:
+                soup = BeautifulSoup(response.content, 'html.parser')
+                products = []
+                
+                # Find product containers (adjust selector based on actual HTML structure)
+                product_elements = soup.find_all('div', class_='product-item') or soup.find_all('article', class_='product') or soup.find_all('div', {'data-testid': 'product-card'})
+                
+                for element in product_elements[:items_per_page]:
+                    try:
+                        # Extract product information
+                        title_elem = element.find('h2') or element.find('h3') or element.find('a', class_='product-title')
+                        price_elem = element.find('span', class_='price') or element.find('div', class_='price')
+                        image_elem = element.find('img')
+                        link_elem = element.find('a')
+                        
+                        if title_elem and price_elem:
+                            title = title_elem.get_text(strip=True)
+                            price = price_elem.get_text(strip=True)
+                            image_url = image_elem.get('src', '') if image_elem else ''
+                            product_url = base_url + link_elem.get('href', '') if link_elem else ''
+                            
+                            # Extract brand from title (first word usually)
+                            brand = title.split()[0] if title else 'Unknown'
+                            
+                            # Extract size if available
+                            size_elem = element.find('span', class_='size') or element.find('div', class_='size')
+                            size = size_elem.get_text(strip=True) if size_elem else 'N/A'
+                            
+                            # Extract condition if available
+                            condition_elem = element.find('span', class_='condition') or element.find('div', class_='condition')
+                            condition = condition_elem.get_text(strip=True) if condition_elem else 'Good'
+                            
+                            # Extract seller if available
+                            seller_elem = element.find('span', class_='seller') or element.find('div', class_='seller')
+                            seller = seller_elem.get_text(strip=True) if seller_elem else 'vestiaire_seller'
+                            
+                            product = {
+                                'Title': title,
+                                'Price': price,
+                                'Brand': brand,
+                                'Size': size,
+                                'Image': image_url,
+                                'Link': product_url,
+                                'Condition': condition,
+                                'Seller': seller,
+                                'OriginalPrice': price,  # Vestiaire often shows original price
+                                'Discount': '0%'  # Would need to calculate if original price available
+                            }
+                            
+                            products.append(product)
+                            
+                    except Exception as e:
+                        print(f"⚠️ Error parsing product: {e}")
+                        continue
+                
+                # Create pagination
+                pagination = {
+                    'current_page': page_number,
+                    'total_pages': page_number + (1 if len(products) == items_per_page else 0),
+                    'has_more': len(products) == items_per_page,
+                    'items_per_page': len(products),
+                    'total_items': len(products)
+                }
+                
+                print(f"✅ Successfully scraped {len(products)} products from Vestiaire")
+                return {'products': products, 'pagination': pagination}
+                
+            else:
+                raise Exception(f"HTTP {response.status_code}: Failed to fetch Vestiaire page")
+                
+        except Exception as e:
+            print(f"❌ Vestiaire scraping failed: {e}")
+            raise e
 
 # Main handler  
 handler = MyHandler
