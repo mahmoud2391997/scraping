@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vinted Scraping API</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            border-radius: 10px;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .api-section {
+            background: white;
+            padding: 25px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .endpoint {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 10px 0;
+            border-left: 4px solid #007bff;
+        }
+        .method {
+            display: inline-block;
+            background: #007bff;
+            color: white;
+            padding: 3px 8px;
+            border-radius: 3px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+        .example {
+            background: #e9ecef;
+            padding: 10px;
+            border-radius: 5px;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            margin: 5px 0;
+        }
+        .status {
+            display: inline-block;
+            padding: 3px 8px;
+            border-radius: 3px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+        .working { background: #28a745; color: white; }
+        .issues { background: #ffc107; color: black; }
+        .broken { background: #dc3545; color: white; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🚀 Multi-Platform Fashion Marketplace Scraping API</h1>
+        <p>Production-ready REST API for scraping Vinted, eBay, and Vestiaire Collective</p>
+    </div>
+
+    <div class="api-section">
+        <h2>📡 Available Endpoints</h2>
+        
+        <div class="endpoint">
+            <span class="method">GET</span>
+            <strong>/</strong> - Vinted Active Listings
+            <span class="status working">✅ Working</span>
+            <div class="example">curl "https://vinted-scraping.vercel.app/?search=nike&country=uk&items_per_page=5"</div>
+        </div>
+
+        <div class="endpoint">
+            <span class="method">GET</span>
+            <strong>/ebay</strong> - eBay Active Listings
+            <span class="status working">✅ Working</span>
+            <div class="example">curl "https://vinted-scraping.vercel.app/ebay?search=iphone&country=us&items_per_page=5"</div>
+        </div>
+
+        <div class="endpoint">
+            <span class="method">GET</span>
+            <strong>/ebay/api</strong> - eBay API (Production-ready)
+            <span class="status issues">⚠️ Needs OAuth</span>
+            <div class="example">curl "https://vinted-scraping.vercel.app/ebay/api?search=iphone&country=us&items_per_page=5"</div>
+        </div>
+
+        <div class="endpoint">
+            <span class="method">GET</span>
+            <strong>/vestiaire</strong> - Vestiaire Collective
+            <span class="status working">✅ Working</span>
+            <div class="example">curl "https://vinted-scraping.vercel.app/vestiaire?search=chanel&country=uk&items_per_page=5"</div>
+        </div>
+
+        <div class="endpoint">
+            <span class="method">GET</span>
+            <strong>/ebay/sold</strong> - eBay Sold Items
+            <span class="status broken">❌ Server Error</span>
+            <div class="example">curl "https://vinted-scraping.vercel.app/ebay/sold?search=macbook&country=uk&items_per_page=5"</div>
+        </div>
+
+        <div class="endpoint">
+            <span class="method">GET</span>
+            <strong>/vinted/sold</strong> - Vinted Sold Items
+            <span class="status broken">❌ Server Error</span>
+            <div class="example">curl "https://vinted-scraping.vercel.app/vinted/sold?search=vintage&country=uk&items_per_page=5"</div>
+        </div>
+    </div>
+
+    <div class="api-section">
+        <h2>📋 Query Parameters</h2>
+        <ul>
+            <li><strong>search</strong> - Search query term (required)</li>
+            <li><strong>country</strong> - Country code (uk, us, de, fr, it, es, etc.)</li>
+            <li><strong>items_per_page</strong> - Number of items (1-50)</li>
+            <li><strong>page</strong> - Page number for pagination</li>
+            <li><strong>min_price</strong> - Minimum price filter</li>
+            <li><strong>max_price</strong> - Maximum price filter</li>
+        </ul>
+    </div>
+
+    <div class="api-section">
+        <h2>🌍 Supported Countries</h2>
+        <p><strong>Vinted:</strong> 25+ countries (UK, DE, FR, IT, ES, PL, NL, etc.)</p>
+        <p><strong>eBay:</strong> 15+ countries (US, UK, DE, FR, IT, ES, CA, AU, etc.)</p>
+        <p><strong>Vestiaire:</strong> UK, US, FR domains with anti-bot protection</p>
+    </div>
+
+    <div class="api-section">
+        <h2>📊 Response Format</h2>
+        <div class="example">
+{
+  "success": true,
+  "data": [
+    {
+      "Title": "Product Name",
+      "Price": "£50",
+      "Brand": "Brand Name",
+      "Size": "M",
+      "Image": "https://example.com/image.jpg",
+      "Link": "https://example.com/item/123",
+      "Condition": "Good",
+      "Seller": "seller_name"
+    }
+  ],
+  "count": 10,
+  "pagination": {
+    "current_page": 1,
+    "total_pages": 5,
+    "has_more": true,
+    "items_per_page": 10,
+    "total_items": 50
+  },
+  "error": null
+}
+        </div>
+    </div>
+
+    <div class="api-section">
+        <h2>🚀 Production Features</h2>
+        <ul>
+            <li>✅ Rate limiting (30 requests/minute)</li>
+            <li>✅ Caching (5-minute cache)</li>
+            <li>✅ Error handling with fallbacks</li>
+            <li>✅ Anti-bot protection</li>
+            <li>✅ Multi-country support</li>
+            <li>✅ Price filtering</li>
+            <li>✅ Real-time data extraction</li>
+        </ul>
+    </div>
+
+    <div class="api-section">
+        <h2>📞 Documentation</h2>
+        <p>This API is designed for educational and research purposes. Please respect the terms of service of the target platforms.</p>
+        <p>For commercial use, please consider using official APIs provided by the platforms.</p>
+    </div>
+</body>
+</html>

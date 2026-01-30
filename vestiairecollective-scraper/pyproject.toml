@@ -1,0 +1,17 @@
+[tool.poetry]
+name = "vestiairecollective-scraper"
+version = "0.1.0"
+description = "Vestiairecollective.com scraper using Scrapfly.io"
+authors = ["Scrapfly <support@scrapfly.io>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.10"
+scrapfly-sdk = "^0.19.0"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^7.0.0"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
