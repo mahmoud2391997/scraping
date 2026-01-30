@@ -1135,122 +1135,107 @@ if __name__ == '__main__':
             return fallback_result
     
     def _execute_vestiaire_scrape(self, search_text, page_number, items_per_page, min_price, max_price, country):
-        """Execute actual Vestiaire scrape using official API with fallback"""
+        """Execute actual Vestiaire scrape using requests with basic implementation"""
         
-        # Import the new Vestiaire API scraper
-        import sys
-        import os
-        sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'vestiairecollective-scraper'))
+        import requests
+        from bs4 import BeautifulSoup
+        import time
+        import random
         
-        from vestiaire_api_scraper import VestiaireAPIScraper
+        # Vestiaire Collective URL construction
+        base_url = "https://www.vestiairecollective.co.uk"
+        search_url = f"{base_url}/search/?q={search_text}&page={page_number}"
         
-        # Get API key from environment
-        api_key = os.getenv('SCRAPFLY_KEY')
+        # Headers to mimic browser
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+            'Accept-Language': 'en-US,en;q=0.5',
+            'Accept-Encoding': 'gzip, deflate',
+            'Connection': 'keep-alive',
+            'Upgrade-Insecure-Requests': '1',
+        }
         
-        # Initialize the new API scraper
-        scraper = VestiaireAPIScraper(scrapfly_api_key=api_key)
-        
-        # Retry logic with exponential backoff
-        max_retries = 3
-        base_delay = 1
-        
-        for attempt in range(max_retries):
-            try:
-                print(f"🔄 Vestiaire API scrape attempt {attempt + 1}/{max_retries}")
+        try:
+            print(f"🔄 Scraping Vestiaire: {search_url}")
+            
+            # Make request with delay
+            time.sleep(random.uniform(1, 3))
+            response = requests.get(search_url, headers=headers, timeout=10)
+            
+            if response.status_code == 200:
+                soup = BeautifulSoup(response.content, 'html.parser')
+                products = []
                 
-                # Determine gender and category from search
-                gender = ["Women"]  # Default, could be made configurable
-                category = ["Bags"]  # Default, could be made configurable
+                # Find product containers (adjust selector based on actual HTML structure)
+                product_elements = soup.find_all('div', class_='product-item') or soup.find_all('article', class_='product') or soup.find_all('div', {'data-testid': 'product-card'})
                 
-                # Scrape using official API
-                products = scraper.scrape_search_page(
-                    search_query=search_text,
-                    page=page_number,
-                    country=country.upper(),
-                    gender=gender,
-                    category=category,
-                    items_per_page=items_per_page
-                )
-                
-                if not products:
-                    print(f"⚠️ No products found, attempt {attempt + 1}")
-                    if attempt < max_retries - 1:
-                        time.sleep(base_delay * (2 ** attempt))
+                for element in product_elements[:items_per_page]:
+                    try:
+                        # Extract product information
+                        title_elem = element.find('h2') or element.find('h3') or element.find('a', class_='product-title')
+                        price_elem = element.find('span', class_='price') or element.find('div', class_='price')
+                        image_elem = element.find('img')
+                        link_elem = element.find('a')
+                        
+                        if title_elem and price_elem:
+                            title = title_elem.get_text(strip=True)
+                            price = price_elem.get_text(strip=True)
+                            image_url = image_elem.get('src', '') if image_elem else ''
+                            product_url = base_url + link_elem.get('href', '') if link_elem else ''
+                            
+                            # Extract brand from title (first word usually)
+                            brand = title.split()[0] if title else 'Unknown'
+                            
+                            # Extract size if available
+                            size_elem = element.find('span', class_='size') or element.find('div', class_='size')
+                            size = size_elem.get_text(strip=True) if size_elem else 'N/A'
+                            
+                            # Extract condition if available
+                            condition_elem = element.find('span', class_='condition') or element.find('div', class_='condition')
+                            condition = condition_elem.get_text(strip=True) if condition_elem else 'Good'
+                            
+                            # Extract seller if available
+                            seller_elem = element.find('span', class_='seller') or element.find('div', class_='seller')
+                            seller = seller_elem.get_text(strip=True) if seller_elem else 'vestiaire_seller'
+                            
+                            product = {
+                                'Title': title,
+                                'Price': price,
+                                'Brand': brand,
+                                'Size': size,
+                                'Image': image_url,
+                                'Link': product_url,
+                                'Condition': condition,
+                                'Seller': seller,
+                                'OriginalPrice': price,  # Vestiaire often shows original price
+                                'Discount': '0%'  # Would need to calculate if original price available
+                            }
+                            
+                            products.append(product)
+                            
+                    except Exception as e:
+                        print(f"⚠️ Error parsing product: {e}")
                         continue
                 
-                # Convert Product objects to dictionaries for API response
-                api_products = []
-                for product in products:
-                    api_product = {
-                        "Title": product.title,
-                        "Price": f"{product.currency} {product.price}",
-                        "Brand": product.brand,
-                        "Size": product.size or "N/A",
-                        "Image": product.image_url,
-                        "Link": product.product_url,
-                        "Condition": product.condition,
-                        "Seller": product.seller,
-                        "Country": product.country,
-                    }
-                    
-                    # Add original price and discount if available
-                    if product.original_price:
-                        api_product["OriginalPrice"] = f"{product.currency} {product.original_price}"
-                    if product.discount_percentage:
-                        api_product["Discount"] = f"{product.discount_percentage}%"
-                    
-                    api_products.append(api_product)
-                
-                # Apply price filtering if specified
-                if min_price is not None or max_price is not None:
-                    filtered_products = []
-                    for product in api_products:
-                        price_str = product.get('Price', '$0')
-                        # Extract numeric value from price string
-                        import re
-                        price_match = re.search(r'(\d+[.,]?\d*)', price_str.replace(' ', ''))
-                        if price_match:
-                            price_value = float(price_match.group(1).replace(',', '.'))
-                            
-                            # Apply filters
-                            include_item = True
-                            if min_price is not None:
-                                include_item = include_item and price_value >= float(min_price)
-                            if max_price is not None:
-                                include_item = include_item and price_value <= float(max_price)
-                            
-                            if include_item:
-                                filtered_products.append(product)
-                    
-                    api_products = filtered_products
-                
-                # Apply pagination
-                start_index = (page_number - 1) * items_per_page
-                end_index = start_index + items_per_page
-                paginated_products = api_products[start_index:end_index]
-                
-                total_items = len(api_products)
+                # Create pagination
                 pagination = {
                     'current_page': page_number,
-                    'total_pages': max(1, (total_items + items_per_page - 1) // items_per_page),
-                    'has_more': end_index < total_items,
-                    'items_per_page': items_per_page,
-                    'total_items': total_items
+                    'total_pages': page_number + (1 if len(products) == items_per_page else 0),
+                    'has_more': len(products) == items_per_page,
+                    'items_per_page': len(products),
+                    'total_items': len(products)
                 }
                 
-                print(f"✅ Successfully scraped {len(paginated_products)} Vestiaire products via official API")
-                return {'products': paginated_products, 'pagination': pagination}
+                print(f"✅ Successfully scraped {len(products)} products from Vestiaire")
+                return {'products': products, 'pagination': pagination}
                 
-            except Exception as e:
-                print(f"⚠️ Vestiaire API scrape attempt {attempt + 1} failed: {e}")
-                if attempt < max_retries - 1:
-                    delay = base_delay * (2 ** attempt)
-                    print(f"⏳ Retrying in {delay} seconds...")
-                    time.sleep(delay)
-                else:
-                    raise e
-        
-        raise Exception(f"All {max_retries} Vestiaire API scrape attempts failed")
+            else:
+                raise Exception(f"HTTP {response.status_code}: Failed to fetch Vestiaire page")
+                
+        except Exception as e:
+            print(f"❌ Vestiaire scraping failed: {e}")
+            raise e
     
     def get_vinted_sold_sample_data(self):
         """Generate sample sold items data for Vinted"""
