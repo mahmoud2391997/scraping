@@ -838,7 +838,7 @@ if __name__ == '__main__':
                 'Brand': 'Sample',
                 'Size': 'N/A',
                 'Image': 'N/A',
-                'Link': f'https://ebay.com/sch/i.html?_nkw={search_text}',
+                'Link': f'https://example.com/search?q={search_text}',
                 'Condition': 'New',
                 'Seller': 'Demo Seller'
             },
@@ -848,7 +848,7 @@ if __name__ == '__main__':
                 'Brand': 'Sample',
                 'Size': 'N/A',
                 'Image': 'N/A',
-                'Link': f'https://ebay.com/sch/i.html?_nkw={search_text}',
+                'Link': f'https://example.com/search?q={search_text}',
                 'Condition': 'Used',
                 'Seller': 'Demo Seller'
             }
@@ -1241,62 +1241,6 @@ if __name__ == '__main__':
         
         raise Exception(f"All {max_retries} Vestiaire API scrape attempts failed")
     
-    def scrape_ebay_data(self, search_text, page_number=1, items_per_page=50, min_price=None, max_price=None, country='uk'):
-        """Scrape data from eBay"""
-        return self.scrape_ebay_working(search_text, page_number, items_per_page, min_price, max_price, country)
-    
-    def get_ebay_sample_data(self):
-        """Generate sample data for eBay"""
-        return [
-            {
-                "Title": "Apple iPhone 13 Pro - 128GB",
-                "Price": "$699.99",
-                "Brand": "Apple",
-                "Size": "128GB",
-                "Image": "https://i.ebayimg.com/images/g/abc/s-l500.jpg",
-                "Link": "https://www.ebay.com/itm/123456",
-                "Condition": "Excellent",
-                "Seller": "tech_seller"
-            },
-            {
-                "Title": "Samsung Galaxy S22 Ultra",
-                "Price": "$549.99",
-                "Brand": "Samsung",
-                "Size": "256GB",
-                "Image": "https://i.ebayimg.com/images/g/def/s-l500.jpg",
-                "Link": "https://www.ebay.com/itm/789012",
-                "Condition": "Like New",
-                "Seller": "phone_deals"
-            }
-        ]
-    
-    def get_ebay_sold_sample_data(self):
-        """Generate sample sold items data for eBay"""
-        return [
-            {
-                "Title": "Nike Air Jordan 1 Retro High - Sold",
-                "Price": "$250.00",
-                "Brand": "Nike",
-                "Size": "10",
-                "Image": "https://i.ebayimg.com/images/g/aaa/s-l500.jpg",
-                "Link": "https://www.ebay.com/itm/aaa",
-                "Condition": "New",
-                "Seller": "sneaker_king",
-                "SoldDate": "2024-01-10"
-            },
-            {
-                "Title": "Canon EOS R5 Mirrorless Camera - Sold",
-                "Price": "$3,899.00",
-                "Brand": "Canon",
-                "Size": "Full Frame",
-                "Image": "https://i.ebayimg.com/images/g/bbb/s-l500.jpg",
-                "Link": "https://www.ebay.com/itm/bbb",
-                "Condition": "Excellent",
-                "Seller": "camera_pro",
-                "SoldDate": "2024-01-08"
-            }
-        ]
-    
     def get_vinted_sold_sample_data(self):
         """Generate sample sold items data for Vinted"""
         return [
@@ -1460,8 +1404,6 @@ if __name__ == '__main__':
     print(f"🚀 Enhanced API Server running on http://localhost:{port}")
     print("📝 Available endpoints:")
     print("   / - Vinted scraper (default)")
-    print("   /ebay - eBay scraper")
-    print("   /ebay/sold - eBay sold items")
     print("   /vinted/sold - Vinted sold items")
     print("   /vestiaire - Vestiaire Collective scraper (enhanced)")
     print("   /health - API health and performance monitoring")
