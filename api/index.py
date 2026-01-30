@@ -1407,53 +1407,129 @@ if __name__ == '__main__':
                             # Build full URL
                             product_url = f"https://www.vestiairecollective.co.uk{relative_link}" if relative_link else ''
                             
-                            # Extract brand from title or description
+                            # Extract brand from title or description with better detection
                             brand = 'Unknown'
-                            if 'chanel' in title.lower() or 'chanel' in description.lower():
-                                brand = 'Chanel'
-                            elif 'louis vuitton' in title.lower() or 'louis vuitton' in description.lower():
-                                brand = 'Louis Vuitton'
-                            elif 'hermès' in title.lower() or 'hermes' in description.lower():
-                                brand = 'Hermès'
-                            elif 'gucci' in title.lower() or 'gucci' in description.lower():
-                                brand = 'Gucci'
-                            elif 'dior' in title.lower() or 'dior' in description.lower():
-                                brand = 'Dior'
-                            elif 'prada' in title.lower() or 'prada' in description.lower():
-                                brand = 'Prada'
-                            elif 'bottega veneta' in title.lower() or 'bottega veneta' in description.lower():
-                                brand = 'Bottega Veneta'
-                            elif 'saint laurent' in title.lower() or 'saint laurent' in description.lower():
-                                brand = 'Saint Laurent'
-                            elif 'celine' in title.lower() or 'celine' in description.lower():
-                                brand = 'Celine'
+                            title_lower = title.lower()
+                            desc_lower = description.lower()
                             
-                            # Extract price from description (basic implementation)
+                            # Comprehensive brand detection
+                            brand_patterns = {
+                                'Chanel': ['chanel'],
+                                'Louis Vuitton': ['louis vuitton', 'lv'],
+                                'Hermès': ['hermès', 'hermes'],
+                                'Gucci': ['gucci'],
+                                'Dior': ['dior'],
+                                'Prada': ['prada'],
+                                'Bottega Veneta': ['bottega veneta'],
+                                'Saint Laurent': ['saint laurent', 'ysl'],
+                                'Celine': ['celine'],
+                                'Balenciaga': ['balenciaga'],
+                                'Fendi': ['fendi'],
+                                'Givenchy': ['givenchy'],
+                                'Valentino': ['valentino'],
+                                'Versace': ['versace'],
+                                'Burberry': ['burberry']
+                            }
+                            
+                            for brand_name, patterns in brand_patterns.items():
+                                if any(pattern in title_lower or pattern in desc_lower for pattern in patterns):
+                                    brand = brand_name
+                                    break
+                            
+                            # Enhanced price extraction from description
                             price = 'Price not available'
-                            price_match = re.search(r'£(\d+(?:,\d+)*)', description)
-                            if price_match:
-                                price = f"£{price_match.group(1)}"
                             
-                            # Generate a placeholder image URL based on product ID
+                            # Multiple price patterns to try
+                            price_patterns = [
+                                r'£(\d+(?:,\d+)*)',
+                                r'(\d+(?:,\d+)*)\s*£',
+                                r'€(\d+(?:,\d+)*)',
+                                r'\$(\d+(?:,\d+)*)',
+                                r'price[:\s]*(\d+(?:,\d+)*)',
+                                r'cost[:\s]*(\d+(?:,\d+)*)',
+                                r'(\d{1,4})\s*(?:pounds?|gbp|eur|usd)'
+                            ]
+                            
+                            for pattern in price_patterns:
+                                price_match = re.search(pattern, description, re.IGNORECASE)
+                                if price_match:
+                                    price_num = price_match.group(1).replace(',', '')
+                                    try:
+                                        price_value = int(price_num)
+                                        if price_value > 100:  # Filter out very small numbers
+                                            if '£' in pattern or 'gbp' in pattern or 'pounds' in pattern:
+                                                price = f"£{price_value:,}"
+                                            elif '€' in pattern or 'eur' in pattern:
+                                                price = f"€{price_value:,}"
+                                            elif '$' in pattern or 'usd' in pattern:
+                                                price = f"${price_value:,}"
+                                            else:
+                                                price = f"£{price_value:,}"  # Default to GBP
+                                            break
+                                    except ValueError:
+                                        continue
+                            
+                            # Enhanced image URL generation
                             image_url = f"https://images.vestiairecollective.com/images/resized/w=256,q=75,f=auto/produit/{product_id}_1.jpg"
                             
-                            # Extract condition from description
-                            condition = 'Good'
-                            if 'very good condition' in description.lower():
-                                condition = 'Very Good'
-                            elif 'excellent condition' in description.lower():
-                                condition = 'Excellent'
-                            elif 'fair condition' in description.lower():
-                                condition = 'Fair'
+                            # Try to extract actual image from description if available
+                            image_match = re.search(r'https://images\.vestiairecollective\.com/[^\s\)]+', description)
+                            if image_match:
+                                image_url = image_match.group(0)
                             
-                            # Generate seller name
+                            # Enhanced condition extraction
+                            condition = 'Good'
+                            condition_patterns = {
+                                'Excellent': ['excellent condition', 'perfect condition', 'like new', 'mint condition'],
+                                'Very Good': ['very good condition', 'great condition', 'excellent'],
+                                'Good': ['good condition', 'used but good', 'fairly good'],
+                                'Fair': ['fair condition', 'acceptable condition', 'worn but fair'],
+                                'Poor': ['poor condition', 'heavily worn', 'damaged']
+                            }
+                            
+                            desc_lower = description.lower()
+                            for cond_name, patterns in condition_patterns.items():
+                                if any(pattern in desc_lower for pattern in patterns):
+                                    condition = cond_name
+                                    break
+                            
+                            # Enhanced seller extraction
                             seller = 'vestiaire_seller'
+                            
+                            # Try to extract seller from description
+                            seller_patterns = [
+                                r'sold by\s+([^\s.,]+)',
+                                r'seller[:\s]+([^\s.,]+)',
+                                r'from\s+([^\s.,]+)\s+shop'
+                            ]
+                            
+                            for pattern in seller_patterns:
+                                seller_match = re.search(pattern, description, re.IGNORECASE)
+                                if seller_match:
+                                    seller = seller_match.group(1).title()
+                                    break
+                            
+                            # Extract size information
+                            size = 'N/A'
+                            size_patterns = [
+                                r'size\s+([A-Z0-9]+)',
+                                r'([A-Z0-9]+)\s*size',
+                                r'uk\s*size\s+(\w+)',
+                                r'eu\s*size\s+(\w+)',
+                                r'us\s*size\s+(\w+)'
+                            ]
+                            
+                            for pattern in size_patterns:
+                                size_match = re.search(pattern, description, re.IGNORECASE)
+                                if size_match:
+                                    size = size_match.group(1).upper()
+                                    break
                             
                             product = {
                                 'Title': title,
                                 'Price': price,
                                 'Brand': brand,
-                                'Size': 'N/A',  # Not available in current API response
+                                'Size': size,  # Use extracted size
                                 'Image': image_url,
                                 'Link': product_url,
                                 'Condition': condition,
@@ -1772,53 +1848,129 @@ if __name__ == '__main__':
                             # Build full URL
                             product_url = f"https://www.vestiairecollective.co.uk{relative_link}" if relative_link else ''
                             
-                            # Extract brand from title or description
+                            # Extract brand from title or description with better detection
                             brand = 'Unknown'
-                            if 'chanel' in title.lower() or 'chanel' in description.lower():
-                                brand = 'Chanel'
-                            elif 'louis vuitton' in title.lower() or 'louis vuitton' in description.lower():
-                                brand = 'Louis Vuitton'
-                            elif 'hermès' in title.lower() or 'hermes' in description.lower():
-                                brand = 'Hermès'
-                            elif 'gucci' in title.lower() or 'gucci' in description.lower():
-                                brand = 'Gucci'
-                            elif 'dior' in title.lower() or 'dior' in description.lower():
-                                brand = 'Dior'
-                            elif 'prada' in title.lower() or 'prada' in description.lower():
-                                brand = 'Prada'
-                            elif 'bottega veneta' in title.lower() or 'bottega veneta' in description.lower():
-                                brand = 'Bottega Veneta'
-                            elif 'saint laurent' in title.lower() or 'saint laurent' in description.lower():
-                                brand = 'Saint Laurent'
-                            elif 'celine' in title.lower() or 'celine' in description.lower():
-                                brand = 'Celine'
+                            title_lower = title.lower()
+                            desc_lower = description.lower()
                             
-                            # Extract price from description (basic implementation)
+                            # Comprehensive brand detection
+                            brand_patterns = {
+                                'Chanel': ['chanel'],
+                                'Louis Vuitton': ['louis vuitton', 'lv'],
+                                'Hermès': ['hermès', 'hermes'],
+                                'Gucci': ['gucci'],
+                                'Dior': ['dior'],
+                                'Prada': ['prada'],
+                                'Bottega Veneta': ['bottega veneta'],
+                                'Saint Laurent': ['saint laurent', 'ysl'],
+                                'Celine': ['celine'],
+                                'Balenciaga': ['balenciaga'],
+                                'Fendi': ['fendi'],
+                                'Givenchy': ['givenchy'],
+                                'Valentino': ['valentino'],
+                                'Versace': ['versace'],
+                                'Burberry': ['burberry']
+                            }
+                            
+                            for brand_name, patterns in brand_patterns.items():
+                                if any(pattern in title_lower or pattern in desc_lower for pattern in patterns):
+                                    brand = brand_name
+                                    break
+                            
+                            # Enhanced price extraction from description
                             price = 'Price not available'
-                            price_match = re.search(r'£(\d+(?:,\d+)*)', description)
-                            if price_match:
-                                price = f"£{price_match.group(1)}"
                             
-                            # Generate a placeholder image URL based on product ID
+                            # Multiple price patterns to try
+                            price_patterns = [
+                                r'£(\d+(?:,\d+)*)',
+                                r'(\d+(?:,\d+)*)\s*£',
+                                r'€(\d+(?:,\d+)*)',
+                                r'\$(\d+(?:,\d+)*)',
+                                r'price[:\s]*(\d+(?:,\d+)*)',
+                                r'cost[:\s]*(\d+(?:,\d+)*)',
+                                r'(\d{1,4})\s*(?:pounds?|gbp|eur|usd)'
+                            ]
+                            
+                            for pattern in price_patterns:
+                                price_match = re.search(pattern, description, re.IGNORECASE)
+                                if price_match:
+                                    price_num = price_match.group(1).replace(',', '')
+                                    try:
+                                        price_value = int(price_num)
+                                        if price_value > 100:  # Filter out very small numbers
+                                            if '£' in pattern or 'gbp' in pattern or 'pounds' in pattern:
+                                                price = f"£{price_value:,}"
+                                            elif '€' in pattern or 'eur' in pattern:
+                                                price = f"€{price_value:,}"
+                                            elif '$' in pattern or 'usd' in pattern:
+                                                price = f"${price_value:,}"
+                                            else:
+                                                price = f"£{price_value:,}"  # Default to GBP
+                                            break
+                                    except ValueError:
+                                        continue
+                            
+                            # Enhanced image URL generation
                             image_url = f"https://images.vestiairecollective.com/images/resized/w=256,q=75,f=auto/produit/{product_id}_1.jpg"
                             
-                            # Extract condition from description
-                            condition = 'Good'
-                            if 'very good condition' in description.lower():
-                                condition = 'Very Good'
-                            elif 'excellent condition' in description.lower():
-                                condition = 'Excellent'
-                            elif 'fair condition' in description.lower():
-                                condition = 'Fair'
+                            # Try to extract actual image from description if available
+                            image_match = re.search(r'https://images\.vestiairecollective\.com/[^\s\)]+', description)
+                            if image_match:
+                                image_url = image_match.group(0)
                             
-                            # Generate seller name
+                            # Enhanced condition extraction
+                            condition = 'Good'
+                            condition_patterns = {
+                                'Excellent': ['excellent condition', 'perfect condition', 'like new', 'mint condition'],
+                                'Very Good': ['very good condition', 'great condition', 'excellent'],
+                                'Good': ['good condition', 'used but good', 'fairly good'],
+                                'Fair': ['fair condition', 'acceptable condition', 'worn but fair'],
+                                'Poor': ['poor condition', 'heavily worn', 'damaged']
+                            }
+                            
+                            desc_lower = description.lower()
+                            for cond_name, patterns in condition_patterns.items():
+                                if any(pattern in desc_lower for pattern in patterns):
+                                    condition = cond_name
+                                    break
+                            
+                            # Enhanced seller extraction
                             seller = 'vestiaire_seller'
+                            
+                            # Try to extract seller from description
+                            seller_patterns = [
+                                r'sold by\s+([^\s.,]+)',
+                                r'seller[:\s]+([^\s.,]+)',
+                                r'from\s+([^\s.,]+)\s+shop'
+                            ]
+                            
+                            for pattern in seller_patterns:
+                                seller_match = re.search(pattern, description, re.IGNORECASE)
+                                if seller_match:
+                                    seller = seller_match.group(1).title()
+                                    break
+                            
+                            # Extract size information
+                            size = 'N/A'
+                            size_patterns = [
+                                r'size\s+([A-Z0-9]+)',
+                                r'([A-Z0-9]+)\s*size',
+                                r'uk\s*size\s+(\w+)',
+                                r'eu\s*size\s+(\w+)',
+                                r'us\s*size\s+(\w+)'
+                            ]
+                            
+                            for pattern in size_patterns:
+                                size_match = re.search(pattern, description, re.IGNORECASE)
+                                if size_match:
+                                    size = size_match.group(1).upper()
+                                    break
                             
                             product = {
                                 'Title': title,
                                 'Price': price,
                                 'Brand': brand,
-                                'Size': 'N/A',  # Not available in current API response
+                                'Size': size,  # Use extracted size
                                 'Image': image_url,
                                 'Link': product_url,
                                 'Condition': condition,
