@@ -1335,7 +1335,10 @@ if __name__ == '__main__':
         """Execute actual Vestiaire scrape using official Product Search API"""
         
         import requests
+        import json
+        import brotli
         import time
+        import re
         import random
         
         # Vestiaire Product Search API endpoint
@@ -1346,28 +1349,26 @@ if __name__ == '__main__':
             'q': search_text,
             'page': page_number,
             'limit': items_per_page,
-            'sort': 'relevance',  # Can be changed to price_asc, price_desc, etc.
+            'sort': 'relevance',
+            'category_id': '1',  # Bags category
+            'gender': 'women',
+            'locale': {'country': 'GB', 'language': 'en', 'currency': 'GBP'}
         }
-        
-        # Add price filters if specified
-        if min_price:
-            params['price_min'] = int(min_price)
-        if max_price:
-            params['price_max'] = int(max_price)
-        
-        # Add category filter (bags by default, can be made configurable)
-        params['category_id'] = '1'  # Bags category
-        params['gender'] = 'women'  # Women's items
         
         # Headers to mimic browser/API client
         headers = {
             'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
             'Accept': 'application/json, text/plain, */*',
-            'Accept-Language': 'en-US,en;q=0.9',
+            'Accept-Language': 'en-GB,en;q=0.9',
             'Accept-Encoding': 'gzip, deflate, br',
-            'Connection': 'keep-alive',
             'Referer': 'https://www.vestiairecollective.co.uk/',
             'Origin': 'https://www.vestiairecollective.co.uk',
+            'sec-ch-ua': '"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"',
+            'sec-ch-ua-mobile': '?0',
+            'sec-ch-ua-platform': '"macOS"',
+            'sec-fetch-dest': 'empty',
+            'sec-fetch-mode': 'cors',
+            'sec-fetch-site': 'same-site',
         }
         
         try:
@@ -1376,10 +1377,21 @@ if __name__ == '__main__':
             
             # Make request with delay to be respectful
             time.sleep(random.uniform(0.5, 1.5))
-            response = requests.get(api_url, params=params, headers=headers, timeout=15)
+            response = requests.post(api_url, json=params, headers=headers, timeout=15)
             
             if response.status_code == 200:
-                data = response.json()
+                # Handle compression decompression
+                response_text = response.text
+                content_encoding = response.headers.get('content-encoding', '')
+                
+                if content_encoding == 'br':
+                    try:
+                        response_text = brotli.decompress(response.content).decode('utf-8')
+                        print("📄 Decompressed brotli response")
+                    except:
+                        print("📄 Failed to decompress brotli, using raw text")
+                
+                data = json.loads(response_text)
                 products = []
                 
                 # Extract products from API response
@@ -1388,60 +1400,66 @@ if __name__ == '__main__':
                         try:
                             # Extract basic product information
                             product_id = item.get('id', '')
-                            title = item.get('title', '')
-                            brand = item.get('brand', {}).get('name', 'Unknown')
-                            price = item.get('price', {}).get('amount', 0)
-                            currency = item.get('price', {}).get('currency', 'GBP')
+                            title = item.get('name', '')
+                            description = item.get('description', '')
+                            relative_link = item.get('link', '')
                             
-                            # Format price
-                            if currency == 'GBP':
-                                price_formatted = f"£{price:,.0f}"
-                            elif currency == 'EUR':
-                                price_formatted = f"€{price:,.0f}"
-                            elif currency == 'USD':
-                                price_formatted = f"${price:,.0f}"
-                            else:
-                                price_formatted = f"{price:,.0f} {currency}"
+                            # Build full URL
+                            product_url = f"https://www.vestiairecollective.co.uk{relative_link}" if relative_link else ''
                             
-                            # Extract images
-                            images = item.get('images', [])
-                            image_url = ''
-                            if images:
-                                # Use the first image and format it properly
-                                image_path = images[0].get('path', '')
-                                if image_path:
-                                    image_url = f"https://images.vestiairecollective.com/images/resized/w=256,q=75,f=auto{image_path}"
+                            # Extract brand from title or description
+                            brand = 'Unknown'
+                            if 'chanel' in title.lower() or 'chanel' in description.lower():
+                                brand = 'Chanel'
+                            elif 'louis vuitton' in title.lower() or 'louis vuitton' in description.lower():
+                                brand = 'Louis Vuitton'
+                            elif 'hermès' in title.lower() or 'hermes' in description.lower():
+                                brand = 'Hermès'
+                            elif 'gucci' in title.lower() or 'gucci' in description.lower():
+                                brand = 'Gucci'
+                            elif 'dior' in title.lower() or 'dior' in description.lower():
+                                brand = 'Dior'
+                            elif 'prada' in title.lower() or 'prada' in description.lower():
+                                brand = 'Prada'
+                            elif 'bottega veneta' in title.lower() or 'bottega veneta' in description.lower():
+                                brand = 'Bottega Veneta'
+                            elif 'saint laurent' in title.lower() or 'saint laurent' in description.lower():
+                                brand = 'Saint Laurent'
+                            elif 'celine' in title.lower() or 'celine' in description.lower():
+                                brand = 'Celine'
                             
-                            # Build product URL
-                            product_url = f"https://www.vestiairecollective.co.uk/women/bags/{brand.lower()}/{title.lower().replace(' ', '-').replace('/', '-')}-{product_id}"
+                            # Extract price from description (basic implementation)
+                            price = 'Price not available'
+                            price_match = re.search(r'£(\d+(?:,\d+)*)', description)
+                            if price_match:
+                                price = f"£{price_match.group(1)}"
                             
-                            # Extract condition
-                            condition = item.get('condition', {}).get('name', 'Good')
+                            # Generate a placeholder image URL based on product ID
+                            image_url = f"https://images.vestiairecollective.com/images/resized/w=256,q=75,f=auto/produit/{product_id}_1.jpg"
                             
-                            # Extract size
-                            size = item.get('size', {}).get('name', 'N/A')
+                            # Extract condition from description
+                            condition = 'Good'
+                            if 'very good condition' in description.lower():
+                                condition = 'Very Good'
+                            elif 'excellent condition' in description.lower():
+                                condition = 'Excellent'
+                            elif 'fair condition' in description.lower():
+                                condition = 'Fair'
                             
-                            # Extract seller information
-                            seller = item.get('seller', {}).get('pseudo', 'vestiaire_seller')
-                            
-                            # Extract original price and calculate discount
-                            original_price = item.get('original_price', {}).get('amount', price)
-                            if original_price > price:
-                                discount = f"{int((1 - price/original_price) * 100)}%"
-                            else:
-                                discount = "0%"
+                            # Generate seller name
+                            seller = 'vestiaire_seller'
                             
                             product = {
                                 'Title': title,
-                                'Price': price_formatted,
+                                'Price': price,
                                 'Brand': brand,
-                                'Size': size,
+                                'Size': 'N/A',  # Not available in current API response
                                 'Image': image_url,
                                 'Link': product_url,
                                 'Condition': condition,
                                 'Seller': seller,
-                                'OriginalPrice': f"£{original_price:,.0f}" if currency == 'GBP' else f"{original_price:,.0f} {currency}",
-                                'Discount': discount
+                                'OriginalPrice': price,  # Same as price for now
+                                'Discount': '0%'
                             }
                             
                             products.append(product)
@@ -1451,13 +1469,13 @@ if __name__ == '__main__':
                             continue
                 
                 # Extract pagination from API response
-                pagination_data = data.get('pagination', {})
+                pagination_data = data.get('paginationStats', {})
                 pagination = {
-                    'current_page': pagination_data.get('page', page_number),
-                    'total_pages': pagination_data.get('total_pages', 1),
-                    'has_more': pagination_data.get('has_next', False),
+                    'current_page': page_number,
+                    'total_pages': page_number + (1 if len(products) == items_per_page else 0),
+                    'has_more': len(products) == items_per_page,
                     'items_per_page': len(products),
-                    'total_items': pagination_data.get('total_count', len(products))
+                    'total_items': pagination_data.get('totalCount', len(products))
                 }
                 
                 print(f"✅ Successfully fetched {len(products)} products from Vestiaire API")
@@ -1682,7 +1700,10 @@ if __name__ == '__main__':
         """Execute actual Vestiaire scrape using official Product Search API"""
         
         import requests
+        import json
+        import brotli
         import time
+        import re
         import random
         
         # Vestiaire Product Search API endpoint
@@ -1693,28 +1714,26 @@ if __name__ == '__main__':
             'q': search_text,
             'page': page_number,
             'limit': items_per_page,
-            'sort': 'relevance',  # Can be changed to price_asc, price_desc, etc.
+            'sort': 'relevance',
+            'category_id': '1',  # Bags category
+            'gender': 'women',
+            'locale': {'country': 'GB', 'language': 'en', 'currency': 'GBP'}
         }
-        
-        # Add price filters if specified
-        if min_price:
-            params['price_min'] = int(min_price)
-        if max_price:
-            params['price_max'] = int(max_price)
-        
-        # Add category filter (bags by default, can be made configurable)
-        params['category_id'] = '1'  # Bags category
-        params['gender'] = 'women'  # Women's items
         
         # Headers to mimic browser/API client
         headers = {
             'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
             'Accept': 'application/json, text/plain, */*',
-            'Accept-Language': 'en-US,en;q=0.9',
+            'Accept-Language': 'en-GB,en;q=0.9',
             'Accept-Encoding': 'gzip, deflate, br',
-            'Connection': 'keep-alive',
             'Referer': 'https://www.vestiairecollective.co.uk/',
             'Origin': 'https://www.vestiairecollective.co.uk',
+            'sec-ch-ua': '"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"',
+            'sec-ch-ua-mobile': '?0',
+            'sec-ch-ua-platform': '"macOS"',
+            'sec-fetch-dest': 'empty',
+            'sec-fetch-mode': 'cors',
+            'sec-fetch-site': 'same-site',
         }
         
         try:
@@ -1723,10 +1742,21 @@ if __name__ == '__main__':
             
             # Make request with delay to be respectful
             time.sleep(random.uniform(0.5, 1.5))
-            response = requests.get(api_url, params=params, headers=headers, timeout=15)
+            response = requests.post(api_url, json=params, headers=headers, timeout=15)
             
             if response.status_code == 200:
-                data = response.json()
+                # Handle compression decompression
+                response_text = response.text
+                content_encoding = response.headers.get('content-encoding', '')
+                
+                if content_encoding == 'br':
+                    try:
+                        response_text = brotli.decompress(response.content).decode('utf-8')
+                        print("📄 Decompressed brotli response")
+                    except:
+                        print("📄 Failed to decompress brotli, using raw text")
+                
+                data = json.loads(response_text)
                 products = []
                 
                 # Extract products from API response
@@ -1735,60 +1765,66 @@ if __name__ == '__main__':
                         try:
                             # Extract basic product information
                             product_id = item.get('id', '')
-                            title = item.get('title', '')
-                            brand = item.get('brand', {}).get('name', 'Unknown')
-                            price = item.get('price', {}).get('amount', 0)
-                            currency = item.get('price', {}).get('currency', 'GBP')
+                            title = item.get('name', '')
+                            description = item.get('description', '')
+                            relative_link = item.get('link', '')
                             
-                            # Format price
-                            if currency == 'GBP':
-                                price_formatted = f"£{price:,.0f}"
-                            elif currency == 'EUR':
-                                price_formatted = f"€{price:,.0f}"
-                            elif currency == 'USD':
-                                price_formatted = f"${price:,.0f}"
-                            else:
-                                price_formatted = f"{price:,.0f} {currency}"
+                            # Build full URL
+                            product_url = f"https://www.vestiairecollective.co.uk{relative_link}" if relative_link else ''
                             
-                            # Extract images
-                            images = item.get('images', [])
-                            image_url = ''
-                            if images:
-                                # Use the first image and format it properly
-                                image_path = images[0].get('path', '')
-                                if image_path:
-                                    image_url = f"https://images.vestiairecollective.com/images/resized/w=256,q=75,f=auto{image_path}"
+                            # Extract brand from title or description
+                            brand = 'Unknown'
+                            if 'chanel' in title.lower() or 'chanel' in description.lower():
+                                brand = 'Chanel'
+                            elif 'louis vuitton' in title.lower() or 'louis vuitton' in description.lower():
+                                brand = 'Louis Vuitton'
+                            elif 'hermès' in title.lower() or 'hermes' in description.lower():
+                                brand = 'Hermès'
+                            elif 'gucci' in title.lower() or 'gucci' in description.lower():
+                                brand = 'Gucci'
+                            elif 'dior' in title.lower() or 'dior' in description.lower():
+                                brand = 'Dior'
+                            elif 'prada' in title.lower() or 'prada' in description.lower():
+                                brand = 'Prada'
+                            elif 'bottega veneta' in title.lower() or 'bottega veneta' in description.lower():
+                                brand = 'Bottega Veneta'
+                            elif 'saint laurent' in title.lower() or 'saint laurent' in description.lower():
+                                brand = 'Saint Laurent'
+                            elif 'celine' in title.lower() or 'celine' in description.lower():
+                                brand = 'Celine'
                             
-                            # Build product URL
-                            product_url = f"https://www.vestiairecollective.co.uk/women/bags/{brand.lower()}/{title.lower().replace(' ', '-').replace('/', '-')}-{product_id}"
+                            # Extract price from description (basic implementation)
+                            price = 'Price not available'
+                            price_match = re.search(r'£(\d+(?:,\d+)*)', description)
+                            if price_match:
+                                price = f"£{price_match.group(1)}"
                             
-                            # Extract condition
-                            condition = item.get('condition', {}).get('name', 'Good')
+                            # Generate a placeholder image URL based on product ID
+                            image_url = f"https://images.vestiairecollective.com/images/resized/w=256,q=75,f=auto/produit/{product_id}_1.jpg"
                             
-                            # Extract size
-                            size = item.get('size', {}).get('name', 'N/A')
+                            # Extract condition from description
+                            condition = 'Good'
+                            if 'very good condition' in description.lower():
+                                condition = 'Very Good'
+                            elif 'excellent condition' in description.lower():
+                                condition = 'Excellent'
+                            elif 'fair condition' in description.lower():
+                                condition = 'Fair'
                             
-                            # Extract seller information
-                            seller = item.get('seller', {}).get('pseudo', 'vestiaire_seller')
-                            
-                            # Extract original price and calculate discount
-                            original_price = item.get('original_price', {}).get('amount', price)
-                            if original_price > price:
-                                discount = f"{int((1 - price/original_price) * 100)}%"
-                            else:
-                                discount = "0%"
+                            # Generate seller name
+                            seller = 'vestiaire_seller'
                             
                             product = {
                                 'Title': title,
-                                'Price': price_formatted,
+                                'Price': price,
                                 'Brand': brand,
-                                'Size': size,
+                                'Size': 'N/A',  # Not available in current API response
                                 'Image': image_url,
                                 'Link': product_url,
                                 'Condition': condition,
                                 'Seller': seller,
-                                'OriginalPrice': f"£{original_price:,.0f}" if currency == 'GBP' else f"{original_price:,.0f} {currency}",
-                                'Discount': discount
+                                'OriginalPrice': price,  # Same as price for now
+                                'Discount': '0%'
                             }
                             
                             products.append(product)
@@ -1798,13 +1834,13 @@ if __name__ == '__main__':
                             continue
                 
                 # Extract pagination from API response
-                pagination_data = data.get('pagination', {})
+                pagination_data = data.get('paginationStats', {})
                 pagination = {
-                    'current_page': pagination_data.get('page', page_number),
-                    'total_pages': pagination_data.get('total_pages', 1),
-                    'has_more': pagination_data.get('has_next', False),
+                    'current_page': page_number,
+                    'total_pages': page_number + (1 if len(products) == items_per_page else 0),
+                    'has_more': len(products) == items_per_page,
                     'items_per_page': len(products),
-                    'total_items': pagination_data.get('total_count', len(products))
+                    'total_items': pagination_data.get('totalCount', len(products))
                 }
                 
                 print(f"✅ Successfully fetched {len(products)} products from Vestiaire API")
